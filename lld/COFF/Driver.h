@@ -13,6 +13,7 @@
 #include "SymbolTable.h"
 #include "lld/Common/LLVM.h"
 #include "lld/Common/Reproduce.h"
+#include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
@@ -22,6 +23,7 @@
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/TarWriter.h"
+#include "llvm/Support/VirtualFileSystem.h"
 #include <memory>
 #include <set>
 #include <vector>
@@ -78,6 +80,7 @@ private:
 
 class LinkerDriver {
 public:
+  LinkerDriver() : vfs(llvm::vfs::getRealFileSystem()) {}
   void linkerMain(llvm::ArrayRef<const char *> args);
 
   // Used by the resolver to parse .drectve section contents.
@@ -148,6 +151,7 @@ private:
   std::vector<MemoryBufferRef> resources;
 
   llvm::StringSet<> directivesExports;
+  llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs;
 };
 
 // Functions below this line are defined in DriverUtils.cpp.
