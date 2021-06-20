@@ -148,7 +148,7 @@ using MBErrPair = std::pair<std::unique_ptr<MemoryBuffer>, std::error_code>;
 
 // Create a std::future that opens and maps a file using the best strategy for
 // the host platform.
-static std::future<MBErrPair> createFutureForFile(std::string path) {
+static std::future<MBErrPair> createFutureForFile(llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> fs, std::string path) {
 #if _WIN32
   // On Windows, file I/O is relatively slow so it is best to do this
   // asynchronously.
@@ -157,9 +157,10 @@ static std::future<MBErrPair> createFutureForFile(std::string path) {
   auto strategy = std::launch::deferred;
 #endif
   return std::async(strategy, [=]() {
-    auto mbOrErr = MemoryBuffer::getFile(path,
+    auto mbOrErr = fs->getBufferForFile(path,
                                          /*FileSize*/ -1,
-                                         /*RequiresNullTerminator*/ false);
+                                         /*RequiresNullTerminator*/ false,
+                                         /*IsVolatile*/false);
     if (!mbOrErr)
       return MBErrPair{nullptr, mbOrErr.getError()};
     return MBErrPair{std::move(*mbOrErr), std::error_code()};
@@ -249,7 +250,7 @@ void LinkerDriver::addBuffer(std::unique_ptr<MemoryBuffer> mb,
 
 void LinkerDriver::enqueuePath(StringRef path, bool wholeArchive, bool lazy) {
   auto future = std::make_shared<std::future<MBErrPair>>(
-      createFutureForFile(std::string(path)));
+      createFutureForFile(vfs, std::string(path)));
   std::string pathStr = std::string(path);
   enqueueTask([=]() {
     auto mbOrErr = future->get();
@@ -325,7 +326,7 @@ void LinkerDriver::enqueueArchiveMember(const Archive::Child &c,
       "could not get the filename for the member defining symbol " +
       toCOFFString(sym));
   auto future = std::make_shared<std::future<MBErrPair>>(
-      createFutureForFile(childName));
+      createFutureForFile(vfs, childName));
   enqueueTask([=]() {
     auto mbOrErr = future->get();
     if (mbOrErr.second)
